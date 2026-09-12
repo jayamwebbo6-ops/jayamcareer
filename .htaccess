@@ -1,0 +1,15 @@
+Options -Indexes
+
+RewriteEngine On
+
+# Proxy all requests to Next.js app running on port 3022
+RewriteRule ^(.*)$ http://127.0.0.1:3022/$1 [P,L]
+
+# Preserve host headers
+ProxyPreserveHost On
+
+# Ensure proper MIME types for Next.js assets
+<IfModule mod_mime.c>
+  AddType application/javascript .js .mjs
+  AddType text/css .css
+</IfModule>
