@@ -50,7 +50,8 @@ export async function GET(request) {
       pass: '', // Masked password
       from: config.from || '',
       cc: config.cc || '',
-      hasPassword: !!config.pass
+      hasPassword: !!config.pass,
+      autoEmailEnabled: config.autoEmailEnabled !== false
     });
   } catch (error) {
     console.error('SMTP fetch error:', error);
@@ -63,7 +64,33 @@ export async function POST(request) {
     await verifyAdmin(request);
     await connectToDatabase();
 
-    const { host, port, secure, user, pass, from, cc } = await request.json();
+    const body = await request.json();
+
+    // Fast toggle for automated email sending
+    if (body.action === 'toggle-auto-email') {
+      let config = await SmtpConfig.findOne();
+      if (!config) {
+        config = new SmtpConfig({
+          host: 'smtp.gmail.com',
+          port: 587,
+          secure: false,
+          user: process.env.SMTP_USER || 'admin@jayamwebsolutions.com',
+          pass: process.env.SMTP_PASS || 'defaultpass',
+          from: process.env.SMTP_FROM || '"Jayam Web Solutions" <admin@jayamwebsolutions.com>',
+          autoEmailEnabled: Boolean(body.autoEmailEnabled)
+        });
+      } else {
+        config.autoEmailEnabled = Boolean(body.autoEmailEnabled);
+      }
+      await config.save();
+      return NextResponse.json({
+        success: true,
+        autoEmailEnabled: config.autoEmailEnabled,
+        message: `Automated email sending ${config.autoEmailEnabled ? 'enabled' : 'disabled'} successfully!`
+      });
+    }
+
+    const { host, port, secure, user, pass, from, cc, autoEmailEnabled } = body;
 
     if (!host || !port || !user || !from) {
       return NextResponse.json({ error: 'Host, Port, User, and From fields are required' }, { status: 400 });
@@ -78,6 +105,9 @@ export async function POST(request) {
       config.user = user;
       config.from = from;
       config.cc = cc || '';
+      if (autoEmailEnabled !== undefined) {
+        config.autoEmailEnabled = Boolean(autoEmailEnabled);
+      }
       
       // Update password only if a new one is provided
       if (pass && pass.trim() !== '') {
@@ -95,12 +125,13 @@ export async function POST(request) {
         user,
         pass,
         from,
-        cc: cc || ''
+        cc: cc || '',
+        autoEmailEnabled: autoEmailEnabled !== undefined ? Boolean(autoEmailEnabled) : true
       });
       await config.save();
     }
 
-    return NextResponse.json({ message: 'SMTP configuration saved successfully!', success: true });
+    return NextResponse.json({ message: 'SMTP configuration saved successfully!', success: true, autoEmailEnabled: config.autoEmailEnabled });
   } catch (error) {
     console.error('SMTP update error:', error);
     return NextResponse.json({ error: error.message || 'Failed to save SMTP config' }, { status: error.message === 'Unauthorized' || error.message === 'Invalid token' ? 401 : 500 });

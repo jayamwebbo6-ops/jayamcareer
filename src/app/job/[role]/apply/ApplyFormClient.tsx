@@ -12,6 +12,7 @@ export default function ApplyFormClient({ category, formTemplate }: { category: 
   const [resumeFile, setResumeFile] = useState<File | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
+  const [submissionResult, setSubmissionResult] = useState<any>(null);
 
   // Stepper State Calculation
   const [currentStep, setCurrentStep] = useState(0);
@@ -132,6 +133,7 @@ export default function ApplyFormClient({ category, formTemplate }: { category: 
         throw new Error('Submission failed');
       }
 
+      setSubmissionResult(res.data);
       setIsSuccess(true);
     } catch (error) {
       console.error('Submit error:', error);
@@ -145,7 +147,7 @@ export default function ApplyFormClient({ category, formTemplate }: { category: 
   const activeStepConfig = steps[currentStep] || { id: '' };
 
   if (isSuccess) {
-    const whatsappText = encodeURIComponent(`Hi, I have completed the interview task for ${category.name}. My name is ${formData.fullName || ''} and phone number is ${formData.mobile || ''}.`);
+    const isAutoMailForTask = submissionResult ? submissionResult.isAutoEmailEnabled !== false : true;
 
     return (
       <div className="w-full max-w-2xl mx-auto px-4 py-20 text-center animate-in fade-in zoom-in duration-500">
@@ -153,27 +155,21 @@ export default function ApplyFormClient({ category, formTemplate }: { category: 
           <div className="w-20 h-20 bg-green-50 rounded-full flex items-center justify-center mb-6 border-4 border-green-100">
             <svg className="w-10 h-10 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
           </div>
-          <h2 className="text-2xl sm:text-3xl font-extrabold text-gray-900 mb-4 text-center font-bold">Application Submitted Successfully!</h2>
+          <h2 className="text-sm sm:text-sm font-extrabold text-gray-900 text-center mb-2">Submitted Successfully!</h2>
 
-          {category.isActive ? (
-            <>
-              <div className="bg-orange-50/60 rounded-2xl border border-orange-100/80 p-6 text-center mb-8 w-full max-w-md animate-in slide-in-from-bottom-4 duration-300">
-                <p className="text-sm font-bold text-orange-800 mb-1">📬 Interview Task Sent!</p>
-                <p className="text-xs text-orange-700 leading-relaxed">
-                  We have sent the remote interview task instructions directly to your email address: <strong className="text-orange-950">{formData.email || 'your registered email'}</strong>.
-                </p>
-                <p className="text-xs text-orange-600 mt-2 font-medium">
-                  Please check your inbox (and spam folder) to complete it.
-                </p>
-              </div>
-
-              <p className="text-sm text-gray-600 mb-8 max-w-md leading-relaxed">
-                Thank you for applying for the <strong className="text-gray-900">{category.name}</strong> position. Once you finish the task, please submit it as per the email instructions.
+          {isAutoMailForTask ? (
+            <div className="bg-orange-50/60 rounded-2xl border border-orange-100/80 p-6 text-center mb-8 w-full max-w-md animate-in slide-in-from-bottom-4 duration-300 mt-3">
+              <p className="text-xl sm:text-2xl font-bold text-orange-800 mb-1">📬 Interview Task Sent!</p>
+              <p className="text-xs sm:text-sm text-orange-700 leading-relaxed">
+                We have sent the remote interview task instructions directly to your email address: <strong className="text-orange-950">{formData.email || 'your registered email'}</strong>.
               </p>
-            </>
+              <p className="text-xs text-orange-600 mt-2 font-medium">
+                Please check your inbox (and spam folder) to complete it.
+              </p>
+            </div>
           ) : (
-            <p className="text-sm text-gray-600 mb-8 max-w-md leading-relaxed">
-              We have successfully received your application for the <strong className="text-gray-900">{category.name}</strong> position. Our team will review your application and contact you soon.
+            <p className="text-xl text-gray-600 mb-8 text-center font-medium">
+              We will get back to you soon. Thank you.
             </p>
           )}
 

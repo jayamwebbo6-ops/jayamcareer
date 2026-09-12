@@ -19,8 +19,4 @@ const formSchema = new mongoose.Schema({
   customSections: [sectionSchema]
 }, { timestamps: true });
 
-if (mongoose.models.Form) {
-  delete mongoose.models.Form;
-}
-
-export default mongoose.model('Form', formSchema);
+export default mongoose.models.Form || mongoose.model('Form', formSchema);

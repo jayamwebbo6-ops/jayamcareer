@@ -8,6 +8,7 @@ import { writeFile, mkdir } from 'fs/promises';
 import path from 'path';
 import { sendTaskEmail, sendThankYouEmail } from '../../../lib/services/email';
 import { saveFile, deleteFile } from '../../../lib/fileUpload';
+import SmtpConfig from '../../../models/SmtpConfig';
 
 export async function POST(request) {
   try {
@@ -74,6 +75,8 @@ export async function POST(request) {
       dynamicData,
     });
 
+    let isAutoEmailEnabled = true;
+
     // Send task or thank you email to the candidate's email address
     try {
       const exp = (staticData.experience || '').toString().trim().toLowerCase();
@@ -128,8 +131,30 @@ export async function POST(request) {
         }
       }
 
-      const taskContent = taskRef.content;
-      const taskLink    = taskRef.taskLink;
+      // Ensure we have a valid taskRef: if matched experience level has no content, fallback to any non-empty task in this category
+      if (!taskRef || !taskRef.content || !taskRef.content.trim()) {
+        const levels = ['task0_6', 'task1', 'task2', 'taskAbove2'];
+        for (const lvl of levels) {
+          const candidate = getTask(category[lvl]);
+          if (candidate && candidate.content && candidate.content.trim()) {
+            taskRef = candidate;
+            expKey = lvl;
+            break;
+          }
+        }
+      }
+
+      // If category still has no valid task content, fallback to any available Task from database
+      if (!taskRef || !taskRef.content || !taskRef.content.trim()) {
+        const anyTask = await Task.findOne({ content: { $exists: true, $ne: '' } }).sort({ createdAt: -1 });
+        if (anyTask) {
+          taskRef = getTask(anyTask);
+          if (!expKey) expKey = 'task0_6';
+        }
+      }
+
+      const taskContent = taskRef?.content || '';
+      const taskLink    = taskRef?.taskLink || '';
 
       const host = request.headers.get('host');
       const proto = request.headers.get('x-forwarded-proto') || 'http';
@@ -140,14 +165,23 @@ export async function POST(request) {
       // Check if there is an associated TaskForm for this Category & Experience
       let taskFormLink = '';
       if (expKey) {
-        const matchingForm = await TaskForm.findOne({ jobCategory: categoryId, experience: expKey });
+        let matchingForm = await TaskForm.findOne({ jobCategory: categoryId, experience: expKey });
+        if (!matchingForm) {
+          matchingForm = await TaskForm.findOne({ jobCategory: categoryId });
+        }
         if (matchingForm) {
           const categorySlug = category.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '');
           taskFormLink = `${baseURL}/submit-task/${categorySlug}?id=${application._id}`;
         }
       }
 
-      if (email) {
+      // Check if automated email sending is enabled
+      const smtpConfig = await SmtpConfig.findOne();
+      isAutoEmailEnabled = smtpConfig ? smtpConfig.autoEmailEnabled !== false : true;
+
+      if (!isAutoEmailEnabled) {
+        console.log(`Automated email is DISABLED in SMTP settings. Skipping auto-email to: ${email}`);
+      } else if (email) {
         if (taskContent && taskContent.trim()) {
           await sendTaskEmail({
             email,
@@ -158,6 +192,10 @@ export async function POST(request) {
             taskFormLink,
             baseURL,
           });
+          application.emailSent = true;
+          application.lastEmailSentAt = new Date();
+          application.lastEmailType = 'Interview Task';
+          await application.save();
           console.log(`Successfully sent task email to ${email}`);
         } else {
           await sendThankYouEmail({
@@ -166,6 +204,10 @@ export async function POST(request) {
             categoryName: category.name,
             baseURL,
           });
+          application.emailSent = true;
+          application.lastEmailSentAt = new Date();
+          application.lastEmailType = 'Thank You';
+          await application.save();
           console.log(`Successfully sent general thank you email to ${email}`);
         }
       }
@@ -173,7 +215,13 @@ export async function POST(request) {
       console.error('Failed to send email to candidate:', mailError);
     }
 
-    return NextResponse.json(application, { status: 201 });
+    const appData = application.toObject ? application.toObject() : application;
+    return NextResponse.json({
+      ...appData,
+      isAutoEmailEnabled,
+      emailSent: Boolean(application.emailSent),
+      lastEmailType: application.lastEmailType || ''
+    }, { status: 201 });
   } catch (error) {
     console.error('Error submitting application:', error);
     return NextResponse.json({ error: 'Failed to submit application' }, { status: 500 });

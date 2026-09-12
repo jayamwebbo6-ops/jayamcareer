@@ -24,7 +24,7 @@ export default async function JobApplicationPage({ params }: { params: Promise<{
   // Find the category and populate the linked form template
   const category = await Category.findOne({
     name: { $regex: new RegExp('^' + searchName + '$', 'i') }
-  }).populate('formId').lean();
+  }).populate({ path: 'formId', model: Form }).lean();
 
   if (!category) {
     return notFound();

@@ -8,6 +8,7 @@ const smtpConfigSchema = new mongoose.Schema({
   pass: { type: String, required: true },
   from: { type: String, required: true },
   cc: { type: String, required: false },
+  autoEmailEnabled: { type: Boolean, default: true },
 }, { timestamps: true });
 
 if (mongoose.models.SmtpConfig) {

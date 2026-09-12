@@ -7,8 +7,8 @@ node_modules/
 .next/
 /out/
 
-# public directory (ignored as requested, excluding background/bg images if needed or ignoring whole folder except non-bg)
-public/
+# public uploads directory (keep logos and static brand assets in git)
+public/uploads/
 
 # production
 /build

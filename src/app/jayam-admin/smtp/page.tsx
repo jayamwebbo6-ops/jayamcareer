@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { fetchSmtpConfig, updateSmtpConfig, fetchOfferTemplate, updateOfferTemplate } from '../../../lib/api';
+import { fetchSmtpConfig, updateSmtpConfig, toggleSmtpAutoEmail, fetchOfferTemplate, updateOfferTemplate } from '../../../lib/api';
 
 export default function SmtpSettingsPage() {
   const [host, setHost] = useState('smtp.gmail.com');
@@ -12,6 +12,8 @@ export default function SmtpSettingsPage() {
   const [from, setFrom] = useState('');
   const [cc, setCc] = useState('');
   const [hasPassword, setHasPassword] = useState(false);
+  const [autoEmailEnabled, setAutoEmailEnabled] = useState(true);
+  const [togglingAutoEmail, setTogglingAutoEmail] = useState(false);
 
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(true);
@@ -42,6 +44,7 @@ export default function SmtpSettingsPage() {
           setFrom(smtpData.from || '');
           setCc(smtpData.cc || '');
           setHasPassword(!!smtpData.hasPassword);
+          setAutoEmailEnabled(smtpData.autoEmailEnabled !== false);
         }
 
         if (templateData && templateData.success) {
@@ -58,6 +61,24 @@ export default function SmtpSettingsPage() {
     loadConfig();
   }, []);
 
+  const handleToggleAutoEmail = async () => {
+    const nextState = !autoEmailEnabled;
+    setAutoEmailEnabled(nextState);
+    setTogglingAutoEmail(true);
+    setError('');
+    setSuccess('');
+    try {
+      await toggleSmtpAutoEmail(nextState);
+      setSuccess(`Automated email sending has been ${nextState ? 'enabled' : 'disabled'}.`);
+    } catch (err: any) {
+      console.error(err);
+      setAutoEmailEnabled(!nextState); // revert
+      setError('Failed to update automated email setting.');
+    } finally {
+      setTogglingAutoEmail(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -72,7 +93,8 @@ export default function SmtpSettingsPage() {
         user,
         pass, // Will not update password if left empty on backend
         from,
-        cc
+        cc,
+        autoEmailEnabled
       });
       setSuccess('SMTP settings updated successfully!');
       if (pass) {
@@ -120,9 +142,39 @@ export default function SmtpSettingsPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
         {/* Left Column: SMTP Configuration */}
         <div className="bg-white rounded-[2rem] shadow-sm border border-gray-100 p-8">
-          <div className="mb-8">
+          <div className="mb-6">
             <h1 className="text-2xl font-bold text-gray-900">SMTP Configurations</h1>
             <p className="text-gray-500 mt-1">Configure SMTP credentials dynamically to send emails to candidates.</p>
+          </div>
+
+          {/* Automation Email Sending Toggle Box */}
+          <div className={`p-5 rounded-2xl border transition-all mb-6 ${autoEmailEnabled ? 'bg-orange-50/50 border-orange-200' : 'bg-gray-50 border-gray-200'}`}>
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex-1">
+                <div className="flex items-center gap-2">
+                  <span className="font-bold text-gray-900 text-base">Automation Email Sending</span>
+                  <span className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border ${autoEmailEnabled ? 'bg-emerald-100 text-emerald-800 border-emerald-300' : 'bg-gray-200 text-gray-700 border-gray-300'}`}>
+                    {autoEmailEnabled ? 'Enabled' : 'Disabled'}
+                  </span>
+                </div>
+                <p className="text-xs text-gray-600 mt-1">
+                  {autoEmailEnabled
+                    ? 'Candidate applications automatically receive interview task or thank-you emails upon submission.'
+                    : 'Automated candidate emails are paused. You can send emails manually from the Applications table.'}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleToggleAutoEmail}
+                disabled={togglingAutoEmail}
+                className={`relative inline-flex h-7 w-14 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${autoEmailEnabled ? 'bg-[#ff6600]' : 'bg-gray-300'} ${togglingAutoEmail ? 'opacity-60 cursor-wait' : ''}`}
+                title={autoEmailEnabled ? 'Click to Disable Automated Emails' : 'Click to Enable Automated Emails'}
+              >
+                <span
+                  className={`pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${autoEmailEnabled ? 'translate-x-7' : 'translate-x-0'}`}
+                />
+              </button>
+            </div>
           </div>
 
           {error && (

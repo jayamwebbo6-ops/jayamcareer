@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import * as XLSX from 'xlsx';
-import api, { fetchAllCategories, deleteApplication, fetchApplications, updateApplicationStatus, fetchAllForms, fetchOfferTemplate, sendOfferEmail, joinEmployee } from '../../../lib/api';
+import api, { fetchAllCategories, deleteApplication, fetchApplications, updateApplicationStatus, fetchAllForms, fetchOfferTemplate, sendOfferEmail, joinEmployee, previewCandidateEmail, sendCandidateManualEmail } from '../../../lib/api';
 import DeleteConfirmModal from '../../../components/DeleteConfirmModal';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
@@ -470,10 +470,10 @@ export default function ApplicationsPage() {
     setOfferApp(app);
     setOfferTargetStatus(status);
     setLoadingTemplate(true);
-    
+
     setOfferCandidateName(app.fullName || '');
     setOfferEmail(app.email || '');
-    
+
     let categoryName = 'REACT DEVELOPER';
     if (activeCategoryId) {
       const activeCat = categories.find(c => c._id === activeCategoryId);
@@ -482,7 +482,7 @@ export default function ApplicationsPage() {
       }
     }
     setOfferJobPosition(categoryName);
-    
+
     const today = new Date();
     const formattedDate = `${String(today.getDate()).padStart(2, '0')}.${String(today.getMonth() + 1).padStart(2, '0')}.${today.getFullYear()}`;
     setOfferStartDate(formattedDate);
@@ -563,6 +563,100 @@ export default function ApplicationsPage() {
     }
   };
 
+  // Manual Candidate Email state
+  const [manualEmailApp, setManualEmailApp] = useState<any>(null);
+  const [manualEmailLoading, setManualEmailLoading] = useState(false);
+  const [manualEmailSending, setManualEmailSending] = useState(false);
+  const [manualEmailType, setManualEmailType] = useState<'task' | 'thankyou' | 'custom'>('task');
+  const [manualEmailCandidate, setManualEmailCandidate] = useState<any>(null);
+  const [manualEmailSubject, setManualEmailSubject] = useState('');
+  const [manualEmailMessage, setManualEmailMessage] = useState('');
+  const [manualTaskLink, setManualTaskLink] = useState('');
+  const [manualTaskFormLink, setManualTaskFormLink] = useState('');
+  const [manualPreviewTask, setManualPreviewTask] = useState<any>(null);
+
+  const openManualEmailModal = async (app: any) => {
+    setManualEmailApp(app);
+    setManualEmailLoading(true);
+    setManualEmailType('task');
+    setManualEmailSubject('');
+    setManualEmailMessage('');
+    setManualTaskLink('');
+    setManualTaskFormLink('');
+
+    try {
+      const res = await previewCandidateEmail(app._id);
+      if (res && res.success) {
+        setManualEmailCandidate(res.candidate);
+        setManualPreviewTask(res.task);
+        setManualTaskLink(res.task?.taskLink || '');
+        setManualTaskFormLink(res.task?.taskFormLink || '');
+        setManualEmailSubject(res.defaultTaskSubject || `Interview Task for ${res.candidate?.categoryName || 'Role'} - Jayam Web Solutions`);
+        setManualEmailMessage(res.task?.content || '');
+
+        if (!res.task?.content) {
+          setManualEmailType('thankyou');
+          setManualEmailSubject(res.defaultThankYouSubject || `Application Received: ${res.candidate?.categoryName || 'Role'} - Jayam Web Solutions`);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to load email preview', err);
+      let catName = 'Candidate';
+      if (activeCategoryId) {
+        const c = categories.find((cat: any) => cat._id === activeCategoryId);
+        if (c?.name) catName = c.name;
+      }
+      setManualEmailCandidate({
+        fullName: app.fullName,
+        email: app.email,
+        categoryName: catName,
+        experience: app.staticData?.experience || ''
+      });
+      setManualEmailSubject(`Interview Task for ${catName} - Jayam Web Solutions`);
+    } finally {
+      setManualEmailLoading(false);
+    }
+  };
+
+  const handleManualTypeChange = (newType: 'task' | 'thankyou' | 'custom') => {
+    setManualEmailType(newType);
+    const catName = manualEmailCandidate?.categoryName || 'Role';
+    if (newType === 'task') {
+      setManualEmailSubject(`Interview Task for ${catName} - Jayam Web Solutions`);
+      setManualEmailMessage(manualPreviewTask?.content || '');
+    } else if (newType === 'thankyou') {
+      setManualEmailSubject(`Application Received: ${catName} - Jayam Web Solutions`);
+      setManualEmailMessage('');
+    } else {
+      setManualEmailSubject(`Update Regarding Your Application - Jayam Web Solutions`);
+      setManualEmailMessage('');
+    }
+  };
+
+  const handleSendManualEmail = async () => {
+    if (!manualEmailApp) return;
+    setManualEmailSending(true);
+    try {
+      const payload: any = {
+        applicationId: manualEmailApp._id,
+        emailType: manualEmailType,
+        customSubject: manualEmailSubject,
+        customMessage: manualEmailMessage,
+        customTaskLink: manualTaskLink,
+        customTaskFormLink: manualTaskFormLink
+      };
+      const res = await sendCandidateManualEmail(payload);
+      showToast(res.message || 'Email sent to candidate successfully!', 'success');
+      setManualEmailApp(null);
+      setRefreshKey(prev => prev + 1);
+    } catch (err: any) {
+      console.error(err);
+      showToast(err.response?.data?.error || err.message || 'Failed to send email.', 'error');
+    } finally {
+      setManualEmailSending(false);
+    }
+  };
+
   // Onboard Employee / Join PM state
   const [joinApp, setJoinApp] = useState<any>(null);
   const [joinTargetStatus, setJoinTargetStatus] = useState<string>('Joined');
@@ -603,7 +697,7 @@ export default function ApplicationsPage() {
     setJoinName(cleanName);
     setJoinPhone(app.mobile || '');
     setJoinPersonalEmail(app.email || '');
-  
+
     setJoinGender(candidateGender);
     setJoinDob(candidateDob);
     setJoinJoiningDate(today);
@@ -1076,9 +1170,9 @@ export default function ApplicationsPage() {
       </div>
 
       {/* Tabs */}
-      <div 
+      <div
         ref={tabsRef}
-        className="flex gap-2 overflow-x-auto p-2.5 shrink-0 bg-[#0f172a] rounded-t-[2rem] border-b border-white/10 no-scrollbar" 
+        className="flex gap-2 overflow-x-auto p-2.5 shrink-0 bg-[#0f172a] rounded-t-[2rem] border-b border-white/10 no-scrollbar"
         style={{ scrollbarWidth: 'none' }}
       >
         {categories.map((cat) => {
@@ -1105,11 +1199,10 @@ export default function ApplicationsPage() {
           {/* Filters Toggle Button */}
           <button
             onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
-            className={`px-5 py-2.5 border rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer shadow-sm hover:border-gray-300 active:scale-95 duration-100 ${
-              showAdvancedFilters
+            className={`px-5 py-2.5 border rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer shadow-sm hover:border-gray-300 active:scale-95 duration-100 ${showAdvancedFilters
                 ? 'bg-blue-50 text-blue-600 border-blue-200'
                 : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
-            }`}
+              }`}
           >
             <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" /></svg>
             {showAdvancedFilters ? 'Hide Filters' : 'Filters'}
@@ -1275,9 +1368,9 @@ export default function ApplicationsPage() {
             </button>
 
             {/* Scrollable Stage Pipeline Bar */}
-            <div 
+            <div
               ref={pipelineRef}
-              className="flex-1 flex items-center gap-2 overflow-x-auto pb-1.5 pt-1 px-8 scroll-smooth no-scrollbar" 
+              className="flex-1 flex items-center gap-2 overflow-x-auto pb-1.5 pt-1 px-8 scroll-smooth no-scrollbar"
               style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
             >
               {WORKFLOW_STAGES.map((stage) => {
@@ -1441,16 +1534,24 @@ export default function ApplicationsPage() {
                       >
                         {app.email}
                       </a>
-                      {app.taskAnswers && (
-                        <div className="mt-1 flex items-center gap-1.5 flex-wrap">
+                      <div className="mt-1 flex items-center gap-1 flex-wrap">
+                        {app.emailSent && (
+                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded leading-none uppercase tracking-wide border bg-emerald-50 text-emerald-700 border-emerald-200 flex items-center gap-0.5" title={app.lastEmailSentAt ? `Sent on ${new Date(app.lastEmailSentAt).toLocaleString()}` : 'Email Sent'}>
+                            <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+                            {app.lastEmailType || 'Sent'}
+                          </span>
+                        )}
+                        {app.taskAnswers && (
                           <span className={`text-[9px] font-black px-1 py-0.5 rounded leading-none uppercase tracking-wide border ${app.taskEvaluated ? 'bg-green-50 text-green-700 border-green-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`}>
                             {app.taskEvaluated ? 'Evaluated' : 'Pending Eval'}
                           </span>
+                        )}
+                        {app.taskAnswers && (app.taskTotalScore !== undefined) && (
                           <span className="text-[10px] font-black text-[#ff6600]">
-                            {(app.taskTotalScore !== undefined) ? `${app.taskTotalScore} / ${app.taskMaxScore || 0}` : ''}
+                            {`${app.taskTotalScore} / ${app.taskMaxScore || 0}`}
                           </span>
-                        </div>
-                      )}
+                        )}
+                      </div>
                     </td>
                     <td className="py-2 px-1 text-sm font-medium">
                       <a
@@ -1520,13 +1621,21 @@ export default function ApplicationsPage() {
                         <div className="flex items-center gap-1">
                           <button
                             onClick={() => setViewApp(app)}
-                            className="bg-cyan-500 hover:bg-cyan-600 text-white text-xs font-bold px-3 py-1 rounded shadow-sm transition-colors"
+                            className="bg-cyan-500 hover:bg-cyan-600 text-white text-xs font-bold px-2.5 py-1 rounded shadow-sm transition-colors cursor-pointer"
                           >
                             View
                           </button>
                           <button
+                            onClick={() => openManualEmailModal(app)}
+                            className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-2 py-1 rounded shadow-sm transition-colors flex items-center gap-1 cursor-pointer"
+                            title="Send Manual Email"
+                          >
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+                            <span>Email</span>
+                          </button>
+                          <button
                             onClick={() => handleDelete(app._id)}
-                            className="bg-red-500 hover:bg-red-600 text-white text-xs font-bold px-2 py-1 rounded shadow-sm transition-colors"
+                            className="bg-red-500 hover:bg-red-600 text-white text-xs font-bold px-2 py-1 rounded shadow-sm transition-colors cursor-pointer"
                             title="Delete"
                           >
                             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
@@ -1822,7 +1931,7 @@ export default function ApplicationsPage() {
                 {/* Inputs Form */}
                 <div className="space-y-4">
                   <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-2">Offer Parameters</h3>
-                  
+
                   <div>
                     <label className="block text-xs font-bold text-gray-700 mb-1">Candidate Name</label>
                     <input
@@ -1970,6 +2079,198 @@ export default function ApplicationsPage() {
         </div>
       )}
 
+      {/* Manual Candidate Email Modal */}
+      {manualEmailApp && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[92vh] overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-200">
+            {/* Modal Header */}
+            <div className="px-6 py-4 border-b border-indigo-100 bg-gradient-to-r from-indigo-50/80 via-blue-50/50 to-white flex justify-between items-center shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-indigo-600 text-white flex items-center justify-center shadow-md shadow-indigo-600/20">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+                </div>
+                <div>
+                  <h2 className="text-lg font-bold text-gray-900">Send Candidate Email</h2>
+                  <p className="text-xs text-gray-500">
+                    To: <strong className="text-indigo-700">{manualEmailCandidate?.fullName || manualEmailApp.fullName}</strong> ({manualEmailCandidate?.email || manualEmailApp.email})
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setManualEmailApp(null)}
+                className="w-9 h-9 rounded-full bg-white border border-gray-200 flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6 overflow-y-auto flex-1 space-y-5">
+              {manualEmailLoading ? (
+                <div className="flex flex-col items-center justify-center py-12">
+                  <div className="w-10 h-10 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+                  <p className="mt-4 text-sm font-medium text-gray-500">Preparing candidate email details...</p>
+                </div>
+              ) : (
+                <>
+                  {/* Email Template Type Selector */}
+                  <div>
+                    <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Email Type</label>
+                    <div className="grid grid-cols-3 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleManualTypeChange('task')}
+                        className={`py-2.5 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 border transition-all cursor-pointer ${manualEmailType === 'task' ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm' : 'bg-gray-50 hover:bg-gray-100 text-gray-700 border-gray-200'}`}
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                        <span>Interview Task</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleManualTypeChange('thankyou')}
+                        className={`py-2.5 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 border transition-all cursor-pointer ${manualEmailType === 'thankyou' ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm' : 'bg-gray-50 hover:bg-gray-100 text-gray-700 border-gray-200'}`}
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                        <span>Thank You</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleManualTypeChange('custom')}
+                        className={`py-2.5 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 border transition-all cursor-pointer ${manualEmailType === 'custom' ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm' : 'bg-gray-50 hover:bg-gray-100 text-gray-700 border-gray-200'}`}
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                        <span>Custom Message</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Info helper */}
+                  <div className="p-3 bg-blue-50/60 border border-blue-100 rounded-xl text-xs text-blue-700 flex items-start gap-2">
+                    <span className="font-bold shrink-0">ℹ️</span>
+                    <div>
+                      {manualEmailType === 'task' && 'Sends the interview task assigned to this candidate for their selected experience level, along with project links and task form.'}
+                      {manualEmailType === 'thankyou' && 'Sends the standard acknowledgment email confirming that their application has been received and is under review.'}
+                      {manualEmailType === 'custom' && 'Sends a custom message in official Jayam Web Solutions branding to this candidate.'}
+                    </div>
+                  </div>
+
+                  {/* Subject Input */}
+                  <div>
+                    <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">Email Subject</label>
+                    <input
+                      type="text"
+                      value={manualEmailSubject}
+                      onChange={(e) => setManualEmailSubject(e.target.value)}
+                      className="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 bg-gray-50 text-gray-900 font-medium"
+                      placeholder="Enter email subject"
+                    />
+                  </div>
+
+                  {/* Conditional Fields for Interview Task */}
+                  {manualEmailType === 'task' && (
+                    <>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">Task Link (Optional)</label>
+                          <input
+                            type="text"
+                            value={manualTaskLink}
+                            onChange={(e) => setManualTaskLink(e.target.value)}
+                            className="w-full px-4 py-2 rounded-xl border border-gray-200 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 bg-gray-50 text-gray-900"
+                            placeholder="https://drive.google.com/... or GitHub link"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">Task Form Link (Optional)</label>
+                          <input
+                            type="text"
+                            value={manualTaskFormLink}
+                            onChange={(e) => setManualTaskFormLink(e.target.value)}
+                            className="w-full px-4 py-2 rounded-xl border border-gray-200 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 bg-gray-50 text-gray-900"
+                            placeholder="Auto-generated submit form link"
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">Interview Task Content / Details</label>
+                        <textarea
+                          value={manualEmailMessage}
+                          onChange={(e) => setManualEmailMessage(e.target.value)}
+                          rows={6}
+                          className="w-full px-4 py-3 rounded-xl border border-gray-200 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 bg-gray-50 text-gray-900 leading-relaxed"
+                          placeholder="Enter or customize the task details..."
+                        />
+                      </div>
+                    </>
+                  )}
+
+                  {/* Conditional Fields for Custom Email */}
+                  {manualEmailType === 'custom' && (
+                    <div>
+                      <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1.5">Email Message</label>
+                      <textarea
+                        value={manualEmailMessage}
+                        onChange={(e) => setManualEmailMessage(e.target.value)}
+                        rows={6}
+                        className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 bg-gray-50 text-gray-900 leading-relaxed"
+                        placeholder="Type your message to the candidate here..."
+                      />
+                    </div>
+                  )}
+
+                  {manualEmailType === 'thankyou' && (
+                    <div className="p-4 bg-gray-50 border border-gray-200 rounded-xl text-xs text-gray-600 leading-relaxed">
+                      <p className="font-bold text-gray-800 mb-1">Standard Thank You Email preview:</p>
+                      <p>Hi <strong>{manualEmailCandidate?.fullName || manualEmailApp.fullName}</strong>,</p>
+                      <p className="mt-1">Thank you for applying for the <strong>{manualEmailCandidate?.categoryName || 'position'}</strong> at Jayam Web Solutions. We have successfully received your application. Our team is currently reviewing all applications and we will contact you if your profile matches our requirements.</p>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="px-6 py-4 border-t border-gray-100 bg-gray-50/60 flex justify-between items-center shrink-0">
+              <span className="text-xs text-gray-500">
+                {manualEmailCandidate?.emailSent && (
+                  <span className="text-emerald-700 font-semibold flex items-center gap-1">
+                    ✓ Previous email was sent ({manualEmailCandidate.lastEmailType || 'Email'})
+                  </span>
+                )}
+              </span>
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setManualEmailApp(null)}
+                  className="px-5 py-2.5 rounded-xl font-bold text-sm text-gray-600 hover:bg-gray-200 transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSendManualEmail}
+                  disabled={manualEmailSending || manualEmailLoading}
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2.5 rounded-xl font-bold text-sm flex items-center gap-2 shadow-md shadow-indigo-600/20 transition-all disabled:opacity-70 cursor-pointer"
+                >
+                  {manualEmailSending ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                      <span>Sending Email...</span>
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" /></svg>
+                      <span>Send Email Now</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Onboard Employee to Project Management Modal */}
       {joinApp && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
@@ -2046,7 +2347,7 @@ export default function ApplicationsPage() {
                     />
                   </div>
 
-                  
+
 
                   <div className="grid grid-cols-2 gap-3">
                     <div>
@@ -2203,14 +2504,12 @@ export default function ApplicationsPage() {
 
       {/* Premium Floating Toast Notification */}
       {toast.type && (
-        <div className={`fixed bottom-6 right-6 z-[100] flex items-center gap-3 px-5 py-4 rounded-2xl shadow-xl backdrop-blur-md border animate-in slide-in-from-bottom duration-300 ${
-          toast.type === 'success' 
-            ? 'bg-emerald-500/10 border-emerald-500/25 text-emerald-800' 
+        <div className={`fixed bottom-6 right-6 z-[100] flex items-center gap-3 px-5 py-4 rounded-2xl shadow-xl backdrop-blur-md border animate-in slide-in-from-bottom duration-300 ${toast.type === 'success'
+            ? 'bg-emerald-500/10 border-emerald-500/25 text-emerald-800'
             : 'bg-red-500/10 border-red-500/25 text-red-800'
-        }`}>
-          <div className={`w-8 h-8 rounded-xl flex items-center justify-center text-white ${
-            toast.type === 'success' ? 'bg-emerald-500 shadow-md shadow-emerald-500/30' : 'bg-red-500 shadow-md shadow-red-500/30'
           }`}>
+          <div className={`w-8 h-8 rounded-xl flex items-center justify-center text-white ${toast.type === 'success' ? 'bg-emerald-500 shadow-md shadow-emerald-500/30' : 'bg-red-500 shadow-md shadow-red-500/30'
+            }`}>
             {toast.type === 'success' ? (
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
             ) : (

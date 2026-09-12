@@ -38,7 +38,7 @@ export async function POST(request) {
       await AdminOTP.findOneAndUpdate(
         { email: lowerEmail },
         { otp: generatedOtp, expiresAt },
-        { upsert: true, new: true }
+        { upsert: true, returnDocument: 'after' }
       );
 
       // Send email

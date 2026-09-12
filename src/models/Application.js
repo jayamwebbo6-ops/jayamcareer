@@ -14,7 +14,10 @@ const ApplicationSchema = new mongoose.Schema({
   taskTotalScore: { type: Number, default: 0 },
   taskMaxScore: { type: Number, default: 0 },
   taskEvaluated: { type: Boolean, default: false },
-  taskSubmittedAt: { type: Date }
+  taskSubmittedAt: { type: Date },
+  emailSent: { type: Boolean, default: false },
+  lastEmailSentAt: { type: Date },
+  lastEmailType: { type: String }
 }, { timestamps: true });
 
 if (mongoose.models.Application) {

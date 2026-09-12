@@ -56,6 +56,25 @@ export const updateSmtpConfig = async (configData) => {
   return response.data;
 };
 
+export const toggleSmtpAutoEmail = async (autoEmailEnabled) => {
+  const response = await api.post('/api/admin/smtp', { action: 'toggle-auto-email', autoEmailEnabled });
+  return response.data;
+};
+
+// Manual candidate email helpers
+export const previewCandidateEmail = async (applicationId) => {
+  const response = await api.post('/api/admin/applications/send-email', {
+    action: 'preview',
+    applicationId
+  });
+  return response.data;
+};
+
+export const sendCandidateManualEmail = async (payload) => {
+  const response = await api.post('/api/admin/applications/send-email', payload);
+  return response.data;
+};
+
 // Offer Template helpers
 export const fetchOfferTemplate = async () => {
   const response = await api.get('/api/admin/offer-template');

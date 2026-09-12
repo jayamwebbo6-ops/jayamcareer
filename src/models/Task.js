@@ -12,8 +12,4 @@ const taskSchema = new mongoose.Schema({
   taskLinks: [taskLinkSchema],  // Support multiple links with individual active/inactive statuses
 }, { timestamps: true });
 
-if (mongoose.models.Task) {
-  delete mongoose.models.Task;
-}
-
-export default mongoose.model('Task', taskSchema);
+export default mongoose.models.Task || mongoose.model('Task', taskSchema);

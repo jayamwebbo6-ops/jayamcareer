@@ -30,14 +30,14 @@ export default async function JobDetails({ params }: { params: Promise<{ role: s
   await connectToDatabase();
   const category = await Category.findOne({
     name: { $regex: new RegExp('^' + searchName + '$', 'i') }
-  }).populate('formId');
+  }).populate({ path: 'formId', model: Form });
 
   if (!category) {
     return notFound();
   }
 
   const displayTitle = category.name;
-  const initials = displayTitle.split(' ').map(w => w[0]).join('').substring(0, 2).toUpperCase();
+  const initials = displayTitle.split(' ').map((w: string) => w[0]).join('').substring(0, 2).toUpperCase();
 
   return (
     <div className="w-full flex flex-col items-center bg-gray-50 min-h-screen">

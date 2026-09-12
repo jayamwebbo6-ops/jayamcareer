@@ -1,4 +1,6 @@
 import mongoose from 'mongoose';
+import './Form';
+import './Task';
 
 const categorySchema = new mongoose.Schema({
   name: { type: String, required: true },
@@ -18,8 +20,4 @@ const categorySchema = new mongoose.Schema({
   taskAbove2Active: { type: Boolean, default: true }
 }, { timestamps: true });
 
-if (mongoose.models.Category) {
-  delete mongoose.models.Category;
-}
-
-export default mongoose.model('Category', categorySchema);
+export default mongoose.models.Category || mongoose.model('Category', categorySchema);

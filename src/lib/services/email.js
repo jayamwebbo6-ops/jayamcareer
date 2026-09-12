@@ -1,13 +1,20 @@
 import nodemailer from 'nodemailer';
 import { connectToDatabase } from '../mongoDb';
 import SmtpConfig from '../../models/SmtpConfig';
+import fs from 'fs';
 import path from 'path';
 
-const getLogoAttachment = () => ({
-  filename: 'logo1.png',
-  path: path.join(process.cwd(), 'public', 'logo1.png'),
-  cid: 'logo1'
-});
+const getLogoAttachments = () => {
+  const logoPath = path.join(process.cwd(), 'public', 'logo1.png');
+  if (fs.existsSync(logoPath)) {
+    return [{
+      filename: 'logo1.png',
+      path: logoPath,
+      cid: 'logo1'
+    }];
+  }
+  return [];
+};
 
 const getTransporterConfig = async () => {
   await connectToDatabase();
@@ -143,7 +150,7 @@ export const sendTaskEmail = async ({ email, fullName, categoryName, taskContent
         <a href="http://www.jayamwebsolutions.com" style="color: #ff6600; text-decoration: none;">www.jayamwebsolutions.com</a>
       </div>
     </div>`,
-    attachments: [getLogoAttachment()]
+    attachments: getLogoAttachments()
   };
 
   return await transporter.sendMail(mailOptions);
@@ -192,7 +199,7 @@ export const sendThankYouEmail = async ({ email, fullName, categoryName, baseURL
         <a href="http://www.jayamwebsolutions.com" style="color: #ff6600; text-decoration: none;">www.jayamwebsolutions.com</a>
       </div>
     </div>`,
-    attachments: [getLogoAttachment()]
+    attachments: getLogoAttachments()
   };
 
   return await transporter.sendMail(mailOptions);
@@ -224,7 +231,7 @@ export const sendCustomEmail = async ({ to, subject, text, html }) => {
     subject,
     text,
     html: processedHtml,
-    attachments: [getLogoAttachment()]
+    attachments: getLogoAttachments()
   };
 
   return await transporter.sendMail(mailOptions);
