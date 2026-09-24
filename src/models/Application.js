@@ -20,6 +20,9 @@ const ApplicationSchema = new mongoose.Schema({
   lastEmailType: { type: String }
 }, { timestamps: true });
 
+ApplicationSchema.index({ categoryId: 1, createdAt: -1 }, { name: 'applications_by_category_date' });
+ApplicationSchema.index({ categoryId: 1, status: 1, createdAt: -1 }, { name: 'applications_by_category_status_date' });
+
 if (mongoose.models.Application) {
   delete mongoose.models.Application;
 }

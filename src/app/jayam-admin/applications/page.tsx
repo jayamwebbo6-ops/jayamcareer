@@ -721,7 +721,6 @@ export default function ApplicationsPage() {
         gender: joinGender || '',
         dob: joinDob || '',
         joiningDate: joinJoiningDate || '',
-        position: joinPosition || '',
         salary: joinSalary || '',
         address: joinAddress || '',
         bankName: joinBankName || '',
