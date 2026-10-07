@@ -30,6 +30,9 @@ const getTransporterConfig = async () => {
           user: dbConfig.user,
           pass: dbConfig.pass,
         },
+        tls: {
+          rejectUnauthorized: false,
+        },
       }),
       from: dbConfig.from,
       cc: dbConfig.cc || '',
@@ -39,12 +42,15 @@ const getTransporterConfig = async () => {
   // Fallback to environment variables
   return {
     transporter: nodemailer.createTransport({
-      host: process.env.SMTP_HOST || 'smtp.gmail.com',
+      host: process.env.SMTP_HOST || 'mail.careeratjayamwebsolutions.com',
       port: parseInt(process.env.SMTP_PORT || '587'),
       secure: process.env.SMTP_SECURE === 'true',
       auth: {
         user: process.env.SMTP_USER || '',
         pass: process.env.SMTP_PASS || '',
+      },
+      tls: {
+        rejectUnauthorized: false,
       },
     }),
     from: process.env.SMTP_FROM || `"Jayam Web Solutions" <${process.env.SMTP_USER}>`,

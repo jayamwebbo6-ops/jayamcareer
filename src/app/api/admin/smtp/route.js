@@ -71,7 +71,7 @@ export async function POST(request) {
       let config = await SmtpConfig.findOne();
       if (!config) {
         config = new SmtpConfig({
-          host: 'smtp.gmail.com',
+          host: 'mail.careeratjayamwebsolutions.com',
           port: 587,
           secure: false,
           user: process.env.SMTP_USER || 'admin@jayamwebsolutions.com',

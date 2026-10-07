@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { fetchSmtpConfig, updateSmtpConfig, toggleSmtpAutoEmail, fetchOfferTemplate, updateOfferTemplate } from '../../../lib/api';
 
 export default function SmtpSettingsPage() {
-  const [host, setHost] = useState('smtp.gmail.com');
+  const [host, setHost] = useState('mail.careeratjayamwebsolutions.com');
   const [port, setPort] = useState(587);
   const [secure, setSecure] = useState(false);
   const [user, setUser] = useState('');
@@ -87,7 +87,7 @@ export default function SmtpSettingsPage() {
 
     try {
       await updateSmtpConfig({
-        host: 'smtp.gmail.com',
+        host: 'mail.careeratjayamwebsolutions.com',
         port: 587,
         secure: false,
         user,
